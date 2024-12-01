@@ -1,95 +1,32 @@
-import { Redis } from '@upstash/redis'
-import { Ratelimit } from '@upstash/ratelimit'
 import { ChatRequestBody, TogetherAIResponse } from '../src/types/together-ai'
+import { getUserBySessionToken, getUserMessageCount, createMessage } from '../src/db'
 
 export const config = {
   runtime: 'edge'
 }
 
-// Create Redis instance
-const redis = Redis.fromEnv()
-
-// Create rate limiter
-const ratelimit = new Ratelimit({
-  redis,
-  limiter: Ratelimit.slidingWindow(10, '1 m'), // 10 requests per minute
-  analytics: true,
-})
-
-// Middleware to check authentication
-async function authenticateRequest(req: Request): Promise<{
-  isAuthenticated: boolean;
-  subscription: string;
-  email?: string;
-}> {
-  const sessionToken = req.headers.get('cookie')?.split('session=')?.[1]?.split(';')?.[0]
-
-  if (!sessionToken) {
-    return { isAuthenticated: false, subscription: 'free' }
-  }
-
-  const userEmail = await redis.get(`session:${sessionToken}`)
-  if (!userEmail) {
-    return { isAuthenticated: false, subscription: 'free' }
-  }
-
-  const user = await redis.get(`user:${userEmail}`)
-  if (!user) {
-    return { isAuthenticated: false, subscription: 'free' }
-  }
-
-  return {
-    isAuthenticated: true,
-    subscription: (user as any).subscription,
-    email: userEmail as string
-  }
-}
-
-export default async function handler(
-  req: Request
-) {
+export default async function handler(req: Request) {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 })
   }
 
   try {
-    // Authenticate request
-    const { isAuthenticated, subscription, email } = await authenticateRequest(req)
-
-    // Apply rate limiting
-    const identifier = email || req.headers.get('x-forwarded-for') || 'anonymous'
-    const { success, limit, reset, remaining } = await ratelimit.limit(identifier)
-
-    if (!success) {
-      return new Response(
-        JSON.stringify({
-          error: 'Rate limit exceeded',
-          limit,
-          reset,
-          remaining
-        }),
-        {
-          status: 429,
-          headers: {
-            'Content-Type': 'application/json',
-            'X-RateLimit-Limit': limit.toString(),
-            'X-RateLimit-Remaining': remaining.toString(),
-            'X-RateLimit-Reset': reset.toString()
-          }
-        }
-      )
-    }
+    // Get session token from cookie
+    const sessionToken = req.headers.get('cookie')?.split('session=')?.[1]?.split(';')?.[0]
+    
+    // Get user from session
+    const user = sessionToken ? await getUserBySessionToken(sessionToken) : null
+    const subscription = user?.subscription || 'free'
 
     // Check message limits for free users
-    if (!isAuthenticated && subscription === 'free') {
-      const messageCount = await redis.get(`messages:${identifier}`) || 0
-      if (Number(messageCount) >= 5) {
+    if (!user || subscription === 'free') {
+      const messageCount = user ? await getUserMessageCount(user.id) : 0
+      if (messageCount >= 5) {
         return new Response(
           JSON.stringify({ error: 'Free message limit exceeded' }),
           { status: 402, headers: { 'Content-Type': 'application/json' } }
         )
       }
-      await redis.incr(`messages:${identifier}`)
     }
 
     const body: ChatRequestBody = await req.json()
@@ -114,12 +51,17 @@ export default async function handler(
 
     const data: TogetherAIResponse = await response.json()
 
+    // Store message in database if user is authenticated
+    if (user) {
+      await createMessage(
+        user.id,
+        body.messages[body.messages.length - 1].content
+      )
+    }
+
     return new Response(JSON.stringify(data), {
       headers: {
-        'Content-Type': 'application/json',
-        'X-RateLimit-Limit': limit.toString(),
-        'X-RateLimit-Remaining': remaining.toString(),
-        'X-RateLimit-Reset': reset.toString()
+        'Content-Type': 'application/json'
       },
     })
   } catch (error) {

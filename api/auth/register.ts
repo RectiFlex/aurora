@@ -1,16 +1,17 @@
-import { VercelRequest, VercelResponse } from '@vercel/edge'
-import { Redis } from '@upstash/redis'
 import { hash } from '@vercel/edge/crypto'
+import { getUserByEmail, createUser } from '../../src/db'
+import { corsHeaders } from '../../src/middleware/cors'
 
 export const config = {
   runtime: 'edge',
 }
 
-const redis = Redis.fromEnv()
-
 export default async function handler(req: Request) {
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 })
+    return new Response('Method not allowed', { 
+      status: 405,
+      headers: corsHeaders(req.headers.get('origin'))
+    })
   }
 
   try {
@@ -19,41 +20,56 @@ export default async function handler(req: Request) {
     if (!email || !password) {
       return new Response(
         JSON.stringify({ error: 'Email and password are required' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        { 
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders(req.headers.get('origin'))
+          }
+        }
       )
     }
 
     // Check if user already exists
-    const existingUser = await redis.get(`user:${email}`)
+    const existingUser = await getUserByEmail(email)
     if (existingUser) {
       return new Response(
         JSON.stringify({ error: 'User already exists' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        { 
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders(req.headers.get('origin'))
+          }
+        }
       )
     }
 
-    // Hash password
+    // Hash password and create user
     const passwordHash = await hash(password)
-
-    // Create user
-    const user = {
-      email,
-      passwordHash,
-      subscription: 'free',
-      createdAt: new Date().toISOString()
-    }
-
-    await redis.set(`user:${email}`, JSON.stringify(user))
+    await createUser(email, passwordHash)
 
     return new Response(
       JSON.stringify({ message: 'User created successfully' }),
-      { status: 201, headers: { 'Content-Type': 'application/json' } }
+      { 
+        status: 201,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders(req.headers.get('origin'))
+        }
+      }
     )
   } catch (error) {
     console.error('Registration error:', error)
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      { 
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders(req.headers.get('origin'))
+        }
+      }
     )
   }
 }

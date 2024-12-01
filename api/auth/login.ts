@@ -1,12 +1,9 @@
-import { VercelRequest, VercelResponse } from '@vercel/edge'
-import { Redis } from '@upstash/redis'
-import { hash, compare } from '@vercel/edge/crypto'
+import { compare } from '@vercel/edge/crypto'
+import { getUserByEmail, createSession } from '../../src/db'
 
 export const config = {
   runtime: 'edge',
 }
-
-const redis = Redis.fromEnv()
 
 export default async function handler(req: Request) {
   if (req.method !== 'POST') {
@@ -23,8 +20,8 @@ export default async function handler(req: Request) {
       )
     }
 
-    // Get user from Redis
-    const user = await redis.get(`user:${email}`)
+    // Get user from database
+    const user = await getUserByEmail(email)
 
     if (!user) {
       return new Response(
@@ -34,7 +31,7 @@ export default async function handler(req: Request) {
     }
 
     // Verify password
-    const isValid = await compare(password, (user as any).passwordHash)
+    const isValid = await compare(password, user.passwordHash)
 
     if (!isValid) {
       return new Response(
@@ -45,14 +42,14 @@ export default async function handler(req: Request) {
 
     // Generate session token
     const sessionToken = crypto.randomUUID()
-    await redis.set(`session:${sessionToken}`, email, { ex: 24 * 60 * 60 }) // 24 hours expiry
+    await createSession(user.id, sessionToken)
 
     return new Response(
       JSON.stringify({
         token: sessionToken,
         user: {
-          email: email,
-          subscription: (user as any).subscription
+          email: user.email,
+          subscription: user.subscription
         }
       }),
       {
