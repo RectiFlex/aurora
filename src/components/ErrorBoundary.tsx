@@ -28,12 +28,15 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // Ensure componentStack is never undefined
+    const componentStack = errorInfo.componentStack || null
+    
     this.setState({
-      componentStack: errorInfo.componentStack
+      componentStack
     })
     
     logError(error, {
-      componentStack: errorInfo.componentStack
+      componentStack
     })
   }
 

@@ -1,5 +1,6 @@
 import { neon } from '@neondatabase/serverless'
 import { drizzle } from 'drizzle-orm/neon-http'
+import { eq, and } from 'drizzle-orm'
 import * as schema from './schema'
 
 // Get database connection string from environment variable
@@ -10,21 +11,23 @@ export const db = drizzle(sql, { schema })
 
 // Helper functions for common database operations
 export async function getUserByEmail(email: string) {
-  const [user] = await db.select().from(schema.users).where(sql`email = ${email}`)
-  return user
+  const users = await db
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.email, email))
+  return users[0]
 }
 
 export async function getUserBySessionToken(token: string) {
-  const [session] = await db
+  const sessions = await db
     .select({
-      user: schema.users,
-      session: schema.sessions
+      user: schema.users
     })
     .from(schema.sessions)
-    .innerJoin(schema.users, sql`${schema.users.id} = ${schema.sessions.userId}`)
-    .where(sql`${schema.sessions.token} = ${token}`)
+    .innerJoin(schema.users, eq(schema.users.id, schema.sessions.userId))
+    .where(eq(schema.sessions.token, token))
 
-  return session?.user
+  return sessions[0]?.user
 }
 
 export async function createSession(userId: number, token: string) {
@@ -39,7 +42,7 @@ export async function createSession(userId: number, token: string) {
 }
 
 export async function createUser(email: string, passwordHash: string) {
-  const [user] = await db
+  const result = await db
     .insert(schema.users)
     .values({
       email,
@@ -48,22 +51,22 @@ export async function createUser(email: string, passwordHash: string) {
     })
     .returning()
 
-  return user
+  return result[0]
 }
 
 export async function getUserMessageCount(userId: number) {
-  const [result] = await db
+  const result = await db
     .select({
-      count: sql<number>`count(*)`
+      count: sql`count(*)`
     })
     .from(schema.messages)
-    .where(sql`user_id = ${userId}`)
+    .where(eq(schema.messages.userId, userId))
 
-  return result?.count ?? 0
+  return Number(result[0]?.count) || 0
 }
 
 export async function createMessage(userId: number, content: string) {
-  const [message] = await db
+  const result = await db
     .insert(schema.messages)
     .values({
       userId,
@@ -71,5 +74,5 @@ export async function createMessage(userId: number, content: string) {
     })
     .returning()
 
-  return message
+  return result[0]
 }
