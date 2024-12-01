@@ -1,7 +1,5 @@
 import { useState, useEffect, useContext } from 'react'
-import { motion } from 'framer-motion'
-import { Code2, Terminal, Play, Maximize2, Minimize2, Trash2, AlertTriangle, Wand2 } from 'lucide-react'
-import { WebContainer } from '@webcontainer/api'
+import { Terminal, Play, Maximize2, Minimize2, AlertTriangle, Wand2 } from 'lucide-react'
 import Editor from '@monaco-editor/react'
 import FileTree from '../components/FileTree'
 import { useLocalStorage } from '../hooks/useLocalStorage'
@@ -17,8 +15,7 @@ interface FileNode {
 
 const AurocoderPage = () => {
   const { darkMode } = useContext(ThemeContext)
-  const [files, setFiles] = useLocalStorage<FileNode[]>('project_files', [])
-  const [selectedFile, setSelectedFile] = useState<string | null>(null)
+  const [files] = useLocalStorage<FileNode[]>('project_files', [])
   const [code, setCode] = useState('')
   const [output, setOutput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -52,8 +49,8 @@ const AurocoderPage = () => {
   }, [])
 
   const handleFileSelect = (path: string) => {
-    setSelectedFile(path)
-    // TODO: Load file contents
+    // TODO: Implement file selection logic
+    console.log('Selected file:', path)
   }
 
   const handleCodeChange = (value: string | undefined) => {

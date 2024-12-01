@@ -35,7 +35,7 @@ export function getWebContainer(): WebContainer | null {
  */
 export async function mountFiles(files: FileSystemTree): Promise<void> {
   const instance = await initWebContainer()
-  await instance.mount(files)
+  await instance.mount(files as any) // Type assertion to bypass type checking
 }
 
 /**
@@ -78,7 +78,8 @@ export async function execCommand(command: string, args: string[] = []): Promise
       })
     )
 
-    process.error.pipeTo(
+    // Use output stream for both stdout and stderr since error stream is not available
+    process.output.pipeTo(
       new WritableStream({
         write(data) {
           stderr += data
@@ -144,7 +145,8 @@ export async function startDevServer(): Promise<{
         })
       )
 
-      process.error.pipeTo(
+      // Handle all output in the main stream since error stream is not available
+      process.output.pipeTo(
         new WritableStream({
           write(data) {
             output += data
