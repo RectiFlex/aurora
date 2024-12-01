@@ -1,4 +1,4 @@
-import { motion, useTransform } from 'framer-motion'
+import { motion, useMotionValue, useTransform } from 'framer-motion'
 
 interface RobotIllustrationProps {
   mouseX: number
@@ -6,15 +6,23 @@ interface RobotIllustrationProps {
 }
 
 const RobotIllustration = ({ mouseX, mouseY }: RobotIllustrationProps) => {
+  // Create motion values
+  const mouseXMotion = useMotionValue(mouseX)
+  const mouseYMotion = useMotionValue(mouseY)
+
+  // Update motion values when props change
+  mouseXMotion.set(mouseX)
+  mouseYMotion.set(mouseY)
+
   // Transform mouse position to rotation values
   const rotateX = useTransform(
-    () => mouseY,
+    mouseYMotion,
     [0, window.innerHeight],
     [15, -15]
   )
   
   const rotateY = useTransform(
-    () => mouseX,
+    mouseXMotion,
     [0, window.innerWidth],
     [-15, 15]
   )
@@ -60,7 +68,7 @@ const RobotIllustration = ({ mouseX, mouseY }: RobotIllustrationProps) => {
             className="fill-pink-500 dark:fill-pink-400"
             animate={{
               cx: 240 + (mouseX / window.innerWidth) * 10 - 5,
-              cy: 160 + (mouseY / window.innerHeight) * 10 - 5,
+              cy: 240 + (mouseY / window.innerHeight) * 10 - 5,
             }}
           />
 
