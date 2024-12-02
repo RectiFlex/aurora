@@ -1,4 +1,4 @@
-import { compare } from '@vercel/edge/crypto'
+import { compare } from 'crypto-js'
 import { getUserByEmail, createSession } from '../../src/db'
 
 export const config = {
