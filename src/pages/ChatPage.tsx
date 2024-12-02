@@ -8,6 +8,8 @@ import { useLocalStorage } from '../hooks/useLocalStorage'
 import { sendChatMessage } from '../services/ai'
 import type { ChatMessage as AIMessage } from '../types/together-ai'
 
+type MessageRole = 'user' | 'system' | 'assistant'
+
 interface Message {
   id: number
   text: string
@@ -77,12 +79,18 @@ const ChatPage = () => {
 
     try {
       const aiMessages: AIMessage[] = [
-        { role: 'system' as const, content: 'You are Aurora, a helpful AI assistant.' },
+        { 
+          role: 'system', 
+          content: 'You are Aurora, a helpful AI assistant.' 
+        } as AIMessage,
         ...currentChat.messages.map(msg => ({
-          role: (msg.sender === 'user' ? 'user' : 'assistant') as const,
+          role: msg.sender === 'user' ? 'user' : 'assistant',
           content: msg.text
-        })),
-        { role: 'user' as const, content: inputMessage }
+        }) as AIMessage),
+        { 
+          role: 'user', 
+          content: inputMessage 
+        } as AIMessage
       ]
 
       const response = await sendChatMessage(aiMessages)
