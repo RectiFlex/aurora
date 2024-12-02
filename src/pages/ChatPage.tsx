@@ -77,12 +77,12 @@ const ChatPage = () => {
 
     try {
       const aiMessages: AIMessage[] = [
-        { role: 'system', content: 'You are Aurora, a helpful AI assistant.' },
+        { role: 'system' as const, content: 'You are Aurora, a helpful AI assistant.' },
         ...currentChat.messages.map(msg => ({
-          role: msg.sender === 'user' ? 'user' : 'assistant',
+          role: (msg.sender === 'user' ? 'user' : 'assistant') as const,
           content: msg.text
         })),
-        { role: 'user', content: inputMessage }
+        { role: 'user' as const, content: inputMessage }
       ]
 
       const response = await sendChatMessage(aiMessages)

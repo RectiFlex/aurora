@@ -1,6 +1,6 @@
 import { neon } from '@neondatabase/serverless'
 import { drizzle } from 'drizzle-orm/neon-http'
-import { eq, and } from 'drizzle-orm'
+import { eq, sql as drizzleSql } from 'drizzle-orm'
 import * as schema from './schema'
 
 // Get database connection string from environment variable
@@ -57,7 +57,7 @@ export async function createUser(email: string, passwordHash: string) {
 export async function getUserMessageCount(userId: number) {
   const result = await db
     .select({
-      count: sql`count(*)`
+      count: drizzleSql<number>`count(*)`
     })
     .from(schema.messages)
     .where(eq(schema.messages.userId, userId))
