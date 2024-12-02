@@ -8,8 +8,6 @@ import { useLocalStorage } from '../hooks/useLocalStorage'
 import { sendChatMessage } from '../services/ai'
 import type { ChatMessage as AIMessage } from '../types/together-ai'
 
-type MessageRole = 'user' | 'system' | 'assistant'
-
 interface Message {
   id: number
   text: string
