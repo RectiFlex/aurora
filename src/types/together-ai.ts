@@ -1,7 +1,7 @@
-export type MessageRole = 'system' | 'user' | 'assistant'
+type Role = 'system' | 'user' | 'assistant'
 
 export interface ChatMessage {
-  role: MessageRole
+  role: Role
   content: string
 }
 

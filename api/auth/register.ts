@@ -1,4 +1,4 @@
-import { SHA256 } from 'crypto-js'
+import { hash } from '@vercel/edge/crypto'
 import { getUserByEmail, createUser } from '../../src/db'
 import { corsHeaders } from '../../src/middleware/cors'
 
@@ -10,7 +10,7 @@ export default async function handler(req: Request) {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { 
       status: 405,
-      headers: corsHeaders(req.headers.get('origin') ?? undefined)
+      headers: corsHeaders(req.headers.get('origin'))
     })
   }
 
@@ -24,7 +24,7 @@ export default async function handler(req: Request) {
           status: 400,
           headers: {
             'Content-Type': 'application/json',
-            ...corsHeaders(req.headers.get('origin') ?? undefined)
+            ...corsHeaders(req.headers.get('origin'))
           }
         }
       )
@@ -39,14 +39,14 @@ export default async function handler(req: Request) {
           status: 400,
           headers: {
             'Content-Type': 'application/json',
-            ...corsHeaders(req.headers.get('origin') ?? undefined)
+            ...corsHeaders(req.headers.get('origin'))
           }
         }
       )
     }
 
     // Hash password and create user
-    const passwordHash = SHA256(password).toString()
+    const passwordHash = await hash(password)
     await createUser(email, passwordHash)
 
     return new Response(
@@ -55,7 +55,7 @@ export default async function handler(req: Request) {
         status: 201,
         headers: {
           'Content-Type': 'application/json',
-          ...corsHeaders(req.headers.get('origin') ?? undefined)
+          ...corsHeaders(req.headers.get('origin'))
         }
       }
     )
@@ -67,7 +67,7 @@ export default async function handler(req: Request) {
         status: 500,
         headers: {
           'Content-Type': 'application/json',
-          ...corsHeaders(req.headers.get('origin') ?? undefined)
+          ...corsHeaders(req.headers.get('origin'))
         }
       }
     )
