@@ -1,105 +1,111 @@
 import { Send, Trash2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
-import ChatMessage from '../components/ChatMessage'
+import ChatMessage, { UIMessage } from '../components/ChatMessage'
 import ChatSidebar from '../components/ChatSidebar'
 import SubscriptionModal from '../components/SubscriptionModal'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { sendChatMessage } from '../services/ai'
-import type { ChatMessage as AIMessage } from '../types/together-ai'
+import type { ChatMessage as AIChatMessage, MessageRole } from '../types/together-ai'
 
-interface Message {
-  id: number
-  text: string
-  sender: 'user' | 'bot'
-}
-
-interface Chat {
+interface ChatSession {
   id: string
   name: string
-  messages: Message[]
+  messages: UIMessage[]
   timestamp: number
 }
 
+const convertToAIRole = (sender: 'user' | 'bot'): MessageRole => {
+  return sender === 'user' ? 'user' : 'assistant'
+}
+
+const systemMessage: AIChatMessage = {
+  role: 'system' as MessageRole,
+  content: 'You are Aurora, a helpful AI assistant.'
+}
+
 const ChatPage = () => {
-  const [chats, setChats] = useLocalStorage<Chat[]>('chats', [])
-  const [activeChat, setActiveChat] = useState<string | null>(null)
+  const [chatSessions, setChatSessions] = useLocalStorage<ChatSession[]>('chat_sessions', [])
+  const [activeChatId, setActiveChatId] = useState<string | null>(null)
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   useEffect(() => {
-    if (chats.length === 0) {
-      createNewChat()
-    } else if (!activeChat) {
-      setActiveChat(chats[0].id)
+    if (chatSessions.length === 0) {
+      createNewChatSession()
+    } else if (!activeChatId) {
+      setActiveChatId(chatSessions[0].id)
     }
-  }, [chats])
+  }, [chatSessions])
 
-  const createNewChat = () => {
-    const newChat: Chat = {
+  const createNewChatSession = () => {
+    const newChatSession: ChatSession = {
       id: crypto.randomUUID(),
-      name: `Chat ${chats.length + 1}`,
+      name: `Chat ${chatSessions.length + 1}`,
       messages: [],
       timestamp: Date.now()
     }
-    setChats([newChat, ...chats])
-    setActiveChat(newChat.id)
+    setChatSessions([newChatSession, ...chatSessions])
+    setActiveChatId(newChatSession.id)
   }
 
-  const getCurrentChat = () => {
-    return chats.find(chat => chat.id === activeChat)
+  const getCurrentChatSession = () => {
+    return chatSessions.find(chat => chat.id === activeChatId)
   }
 
   const handleSendMessage = async () => {
-    if (!inputMessage.trim() || !activeChat) return
+    if (!inputMessage.trim() || !activeChatId) return
 
-    const currentChat = getCurrentChat()
-    if (!currentChat) return
+    const currentChatSession = getCurrentChatSession()
+    if (!currentChatSession) return
 
-    const userMessage: Message = {
-      id: currentChat.messages.length + 1,
-      text: inputMessage,
+    const userMessage: UIMessage = {
+      id: currentChatSession.messages.length + 1,
+      content: inputMessage,
       sender: 'user'
     }
 
-    const updatedChat = {
-      ...currentChat,
-      messages: [...currentChat.messages, userMessage]
+    const updatedChatSession = {
+      ...currentChatSession,
+      messages: [...currentChatSession.messages, userMessage]
     }
 
-    setChats(chats.map(chat => 
-      chat.id === activeChat ? updatedChat : chat
+    setChatSessions(chatSessions.map(chat => 
+      chat.id === activeChatId ? updatedChatSession : chat
     ))
     setInputMessage('')
     setIsLoading(true)
 
     try {
-      const aiMessages: AIMessage[] = [
-        { role: 'system', content: 'You are Aurora, a helpful AI assistant.' },
-        ...currentChat.messages.map(msg => ({
-          role: msg.sender === 'user' ? 'user' : 'assistant',
-          content: msg.text
+      const aiMessages: AIChatMessage[] = [
+        systemMessage,
+        ...currentChatSession.messages.map(msg => ({
+          role: convertToAIRole(msg.sender),
+          content: msg.content
         })),
-        { role: 'user', content: inputMessage }
+        {
+          role: 'user' as MessageRole,
+          content: inputMessage
+        }
       ]
 
       const response = await sendChatMessage(aiMessages)
 
-      const botMessage: Message = {
-        id: updatedChat.messages.length + 1,
-        text: response,
+      const botMessage: UIMessage = {
+        id: updatedChatSession.messages.length + 1,
+        content: response,
         sender: 'bot'
       }
 
-      const finalChat = {
-        ...updatedChat,
-        messages: [...updatedChat.messages, botMessage]
+      const finalChatSession: ChatSession = {
+        ...updatedChatSession,
+        messages: [...updatedChatSession.messages, botMessage]
       }
 
-      setChats(chats.map(chat => 
-        chat.id === activeChat ? finalChat : chat
+      setChatSessions(chatSessions.map(chat => 
+        chat.id === activeChatId ? finalChatSession : chat
       ))
     } catch (error) {
       console.error('Error getting AI response:', error)
@@ -118,24 +124,24 @@ const ChatPage = () => {
     }
   }
 
-  const clearChat = () => {
-    if (!activeChat) return
-    const updatedChat = {
-      ...getCurrentChat()!,
+  const clearCurrentChat = () => {
+    if (!activeChatId) return
+    const updatedChatSession: ChatSession = {
+      ...getCurrentChatSession()!,
       messages: []
     }
-    setChats(chats.map(chat => 
-      chat.id === activeChat ? updatedChat : chat
+    setChatSessions(chatSessions.map(chat => 
+      chat.id === activeChatId ? updatedChatSession : chat
     ))
   }
 
   return (
     <div className="flex h-screen pt-16">
       <ChatSidebar
-        chats={chats}
-        activeChat={activeChat || ''}
-        onChatSelect={setActiveChat}
-        onNewChat={createNewChat}
+        chats={chatSessions}
+        activeChat={activeChatId || ''}
+        onChatSelect={setActiveChatId}
+        onNewChat={createNewChatSession}
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
@@ -143,7 +149,7 @@ const ChatPage = () => {
       <div className="flex-1 flex flex-col">
         {/* Chat Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
-          {getCurrentChat()?.messages.map((message) => (
+          {getCurrentChatSession()?.messages.map((message) => (
             <ChatMessage key={message.id} message={message} />
           ))}
           {isLoading && (
@@ -167,7 +173,7 @@ const ChatPage = () => {
         <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-4">
           <div className="max-w-4xl mx-auto flex gap-4">
             <button
-              onClick={clearChat}
+              onClick={clearCurrentChat}
               className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
               title="Clear chat"
             >

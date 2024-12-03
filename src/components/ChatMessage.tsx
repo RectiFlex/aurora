@@ -1,13 +1,13 @@
 import { motion } from 'framer-motion'
 
-interface Message {
+export interface UIMessage {
   id: number
-  text: string
+  content: string
   sender: 'user' | 'bot'
 }
 
 interface ChatMessageProps {
-  message: Message
+  message: UIMessage
 }
 
 const ChatMessage = ({ message }: ChatMessageProps) => {
@@ -26,7 +26,7 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
             : 'bg-gradient-to-r from-purple-600 to-pink-600 text-white'
         }`}
       >
-        {message.text}
+        {message.content}
       </div>
     </motion.div>
   )
