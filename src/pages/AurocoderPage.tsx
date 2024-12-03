@@ -1,11 +1,12 @@
 import { useState, useEffect, useContext } from 'react'
-import { Terminal, Play, Maximize2, Minimize2, AlertTriangle, Wand2 } from 'lucide-react'
+import { Terminal, Play, Maximize2, Minimize2, AlertTriangle, Wand2, LayoutPanelLeft, LayoutPanelRight } from 'lucide-react'
 import Editor from '@monaco-editor/react'
 import FileTree from '../components/FileTree'
+import PreviewFrame from '../components/PreviewFrame'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { ThemeContext } from '../App'
 import { generateCode } from '../services/ai'
-import { mountFiles, startDevServer, installDependencies } from '../services/webcontainer'
+import { mountFiles, startDevServer, installDependencies, writeFile } from '../services/webcontainer'
 
 interface FileNode {
   name: string
@@ -22,11 +23,13 @@ const AurocoderPage = () => {
   const [error, setError] = useState<string | null>(null)
   const [serverUrl, setServerUrl] = useState<string | null>(null)
   const [maximized, setMaximized] = useState(false)
+  const [showPreview, setShowPreview] = useState(true)
 
   useEffect(() => {
     // Initialize WebContainer when component mounts
     const init = async () => {
       try {
+        setOutput('Initializing development environment...')
         await mountFiles({
           'package.json': {
             file: {
@@ -35,11 +38,38 @@ const AurocoderPage = () => {
                 type: 'module',
                 scripts: {
                   dev: 'vite'
+                },
+                dependencies: {
+                  react: '^18.2.0',
+                  'react-dom': '^18.2.0'
+                },
+                devDependencies: {
+                  '@vitejs/plugin-react': '^4.0.0',
+                  'vite': '^4.3.9'
                 }
-              })
+              }, null, 2)
+            }
+          },
+          'src': {
+            directory: {
+              'main.jsx': {
+                file: {
+                  contents: `
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App'
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+)`
+                }
+              }
             }
           }
         })
+        setOutput('Environment initialized successfully!')
       } catch (error) {
         console.error('Failed to initialize WebContainer:', error)
         setError('Failed to initialize development environment')
@@ -75,11 +105,16 @@ const AurocoderPage = () => {
   const handleRunCode = async () => {
     setIsLoading(true)
     setError(null)
+    setOutput('Starting development server...')
+
     try {
-      // Install dependencies first
+      // Write the current code to App.jsx
+      await writeFile('src/App.jsx', code || 'export default function App() { return <div>Hello World</div> }')
+
+      // Install dependencies if needed
       const install = await installDependencies(['vite', '@vitejs/plugin-react'])
       if (!install.success) {
-        throw new Error('Failed to install dependencies')
+        throw new Error(install.error || 'Failed to install dependencies')
       }
 
       // Start development server
@@ -109,7 +144,7 @@ const AurocoderPage = () => {
             <FileTree files={files} onSelectFile={handleFileSelect} />
           </div>
 
-          {/* Code Editor */}
+          {/* Main Content */}
           <div className="flex-1 flex flex-col">
             <div className="border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between p-2">
@@ -130,6 +165,16 @@ const AurocoderPage = () => {
                     <Play className="w-4 h-4" />
                     Run
                   </button>
+                  <button
+                    onClick={() => setShowPreview(!showPreview)}
+                    className="flex items-center gap-1 px-3 py-1 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                  >
+                    {showPreview ? (
+                      <><LayoutPanelLeft className="w-4 h-4" /> Hide Preview</>
+                    ) : (
+                      <><LayoutPanelRight className="w-4 h-4" /> Show Preview</>
+                    )}
+                  </button>
                 </div>
                 <button
                   onClick={() => setMaximized(!maximized)}
@@ -144,28 +189,38 @@ const AurocoderPage = () => {
               </div>
             </div>
 
-            <div className="flex-1 overflow-hidden">
-              <Editor
-                height="100%"
-                defaultLanguage="javascript"
-                theme={darkMode ? 'vs-dark' : 'light'}
-                value={code}
-                onChange={handleCodeChange}
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 14,
-                  scrollBeyondLastLine: false,
-                }}
-              />
+            <div className="flex-1 flex">
+              {/* Code Editor */}
+              <div className={`${showPreview ? 'w-1/2' : 'w-full'} border-r border-gray-200 dark:border-gray-700`}>
+                <Editor
+                  height="100%"
+                  defaultLanguage="javascript"
+                  theme={darkMode ? 'vs-dark' : 'light'}
+                  value={code}
+                  onChange={handleCodeChange}
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 14,
+                    scrollBeyondLastLine: false,
+                  }}
+                />
+              </div>
+
+              {/* Preview */}
+              {showPreview && (
+                <div className="w-1/2">
+                  <PreviewFrame url={serverUrl} />
+                </div>
+              )}
             </div>
 
             {/* Output Terminal */}
-            <div className="h-1/3 border-t border-gray-200 dark:border-gray-700 bg-gray-900 text-white overflow-auto">
+            <div className="h-1/4 border-t border-gray-200 dark:border-gray-700 bg-gray-900 text-white overflow-auto">
               <div className="flex items-center gap-2 p-2 border-b border-gray-700">
                 <Terminal className="w-4 h-4" />
                 <span className="text-sm">Output</span>
               </div>
-              <div className="p-4 font-mono text-sm">
+              <div className="p-4 font-mono text-sm whitespace-pre-wrap">
                 {error ? (
                   <div className="flex items-center gap-2 text-red-400">
                     <AlertTriangle className="w-4 h-4" />

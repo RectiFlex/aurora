@@ -35,7 +35,7 @@ export function getWebContainer(): WebContainer | null {
  */
 export async function mountFiles(files: FileSystemTree): Promise<void> {
   const instance = await initWebContainer()
-  await instance.mount(files as any) // Type assertion to bypass type checking
+  await instance.mount(files)
 }
 
 /**
@@ -56,60 +56,38 @@ export async function readFile(path: string): Promise<string> {
 }
 
 /**
- * Execute a command in the WebContainer
- */
-export async function execCommand(command: string, args: string[] = []): Promise<{
-  exit: number
-  stdout: string
-  stderr: string
-}> {
-  const instance = await initWebContainer()
-  const process = await instance.spawn(command, args)
-  
-  return new Promise((resolve) => {
-    let stdout = ''
-    let stderr = ''
-
-    process.output.pipeTo(
-      new WritableStream({
-        write(data) {
-          stdout += data
-        },
-      })
-    )
-
-    // Use output stream for both stdout and stderr since error stream is not available
-    process.output.pipeTo(
-      new WritableStream({
-        write(data) {
-          stderr += data
-        },
-      })
-    )
-
-    process.exit.then((exit) => {
-      resolve({ exit, stdout, stderr })
-    })
-  })
-}
-
-/**
  * Install npm dependencies in the WebContainer
  */
 export async function installDependencies(dependencies: string[]): Promise<{
   success: boolean
-  output: string
+  error?: string
 }> {
   try {
-    const result = await execCommand('npm', ['install', ...dependencies])
-    return {
-      success: result.exit === 0,
-      output: result.stdout + result.stderr
-    }
+    const instance = await initWebContainer()
+    const process = await instance.spawn('npm', ['install', ...dependencies])
+    
+    return new Promise((resolve) => {
+      let output = ''
+
+      process.output.pipeTo(
+        new WritableStream({
+          write(data) {
+            output += data
+          },
+        })
+      )
+
+      process.exit.then((code) => {
+        resolve({
+          success: code === 0,
+          error: code !== 0 ? output : undefined
+        })
+      })
+    })
   } catch (error) {
     return {
       success: false,
-      output: error instanceof Error ? error.message : 'Unknown error occurred'
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
     }
   }
 }
@@ -124,44 +102,78 @@ export async function startDevServer(): Promise<{
 }> {
   try {
     const instance = await initWebContainer()
-    const process = await instance.spawn('npm', ['run', 'dev'])
+    
+    // First, create a basic vite config
+    await writeFile('vite.config.js', `
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    host: true,
+    port: 5173
+  }
+})`)
+    
+    // Create a basic index.html if it doesn't exist
+    await writeFile('index.html', `
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Preview</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>`)
+
+    const serverProcess = await instance.spawn('npm', ['run', 'dev'])
     
     return new Promise((resolve) => {
       let output = ''
+      let resolved = false
 
-      process.output.pipeTo(
+      serverProcess.output.pipeTo(
         new WritableStream({
           write(data) {
             output += data
             // Look for the development server URL in the output
-            const match = output.match(/Local:\s+(http:\/\/localhost:\d+)/)
-            if (match) {
-              resolve({
-                success: true,
-                url: match[1]
-              })
+            if (!resolved && output.includes('Local:')) {
+              resolved = true
+              const urlMatch = output.match(/(?:Local|Network):\s+(http:\/\/[\w.]+:\d+)/)
+              if (urlMatch) {
+                resolve({
+                  success: true,
+                  url: urlMatch[1].replace('localhost', '0.0.0.0')
+                })
+              }
             }
           },
         })
       )
 
-      // Handle all output in the main stream since error stream is not available
-      process.output.pipeTo(
-        new WritableStream({
-          write(data) {
-            output += data
-          },
-        })
-      )
-
-      process.exit.then((code) => {
-        if (code !== 0) {
+      serverProcess.exit.then((code) => {
+        if (!resolved) {
           resolve({
             success: false,
-            error: `Server failed to start: ${output}`
+            error: `Server failed to start (exit code ${code}): ${output}`
           })
         }
       })
+
+      // Resolve after timeout if server doesn't start
+      setTimeout(() => {
+        if (!resolved) {
+          resolve({
+            success: false,
+            error: 'Server start timeout'
+          })
+        }
+      }, 30000)
     })
   } catch (error) {
     return {
