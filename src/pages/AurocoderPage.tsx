@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from 'react'
-import { Terminal, Play, Maximize2, Minimize2, AlertTriangle, Wand2, LayoutPanelLeft, LayoutPanelRight } from 'lucide-react'
+import { Terminal, Play, Maximize2, Minimize2, AlertTriangle, Wand2, LayoutPanelLeft, LayoutPanelTop } from 'lucide-react'
 import Editor from '@monaco-editor/react'
 import FileTree from '../components/FileTree'
 import PreviewFrame from '../components/PreviewFrame'
@@ -172,7 +172,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     {showPreview ? (
                       <><LayoutPanelLeft className="w-4 h-4" /> Hide Preview</>
                     ) : (
-                      <><LayoutPanelRight className="w-4 h-4" /> Show Preview</>
+                      <><LayoutPanelTop className="w-4 h-4" /> Show Preview</>
                     )}
                   </button>
                 </div>
