@@ -6,18 +6,23 @@ import ChatSidebar from '../components/ChatSidebar'
 import SubscriptionModal from '../components/SubscriptionModal'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { sendChatMessage } from '../services/ai'
-import type { ChatMessage as AIMessage } from '../types/together-ai'
+import type { ChatMessage as AIChatMessage } from '../types/together-ai'
 
-interface Message {
+// Define the possible roles for messages
+type MessageRole = 'system' | 'user' | 'assistant'
+
+// Interface for UI messages
+interface UIMessage {
   id: number
   text: string
   sender: 'user' | 'bot'
 }
 
+// Interface for chat history
 interface Chat {
   id: string
   name: string
-  messages: Message[]
+  messages: UIMessage[]
   timestamp: number
 }
 
@@ -52,13 +57,18 @@ const ChatPage = () => {
     return chats.find(chat => chat.id === activeChat)
   }
 
+  const convertToAIMessage = (message: UIMessage): AIChatMessage => ({
+    role: message.sender === 'user' ? 'user' as const : 'assistant' as const,
+    content: message.text
+  })
+
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || !activeChat) return
 
     const currentChat = getCurrentChat()
     if (!currentChat) return
 
-    const userMessage: Message = {
+    const userMessage: UIMessage = {
       id: currentChat.messages.length + 1,
       text: inputMessage,
       sender: 'user'
@@ -76,18 +86,22 @@ const ChatPage = () => {
     setIsLoading(true)
 
     try {
-      const aiMessages: AIMessage[] = [
-        { role: 'system', content: 'You are Aurora, a helpful AI assistant.' },
-        ...currentChat.messages.map(msg => ({
-          role: msg.sender === 'user' ? 'user' : 'assistant',
-          content: msg.text
-        })),
-        { role: 'user', content: inputMessage }
+      // Convert UI messages to AI messages
+      const aiMessages: AIChatMessage[] = [
+        {
+          role: 'system' as const,
+          content: 'You are Aurora, a helpful AI assistant.'
+        },
+        ...currentChat.messages.map(convertToAIMessage),
+        {
+          role: 'user' as const,
+          content: inputMessage
+        }
       ]
 
       const response = await sendChatMessage(aiMessages)
 
-      const botMessage: Message = {
+      const botMessage: UIMessage = {
         id: updatedChat.messages.length + 1,
         text: response,
         sender: 'bot'

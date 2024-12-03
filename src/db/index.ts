@@ -1,7 +1,8 @@
 import { neon } from '@neondatabase/serverless'
 import { drizzle } from 'drizzle-orm/neon-http'
-import { eq, and } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import * as schema from './schema'
+import { SQL } from 'drizzle-orm'
 
 // Get database connection string from environment variable
 const sql = neon(process.env.NEON_DATABASE_URL!)
@@ -54,15 +55,15 @@ export async function createUser(email: string, passwordHash: string) {
   return result[0]
 }
 
-export async function getUserMessageCount(userId: number) {
+export async function getUserMessageCount(userId: number): Promise<number> {
   const result = await db
     .select({
-      count: sql`count(*)`
+      count: sql<number>`count(*)`
     })
     .from(schema.messages)
     .where(eq(schema.messages.userId, userId))
 
-  return Number(result[0]?.count) || 0
+  return result[0]?.count || 0
 }
 
 export async function createMessage(userId: number, content: string) {

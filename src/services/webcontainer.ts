@@ -1,17 +1,25 @@
-import { WebContainer } from '@webcontainer/api'
+import { WebContainer, FileSystemTree as WebContainerFSTree } from '@webcontainer/api'
 
-let webcontainerInstance: WebContainer | null = null
-
-export interface FileSystemTree {
-  [key: string]: {
-    file?: {
-      contents: string
-    }
-    directory?: {
-      [key: string]: any
-    }
+// Extended type definitions to match WebContainer's expectations
+export type FileSystemTreeContent = {
+  file: {
+    contents: string
+  }
+} | {
+  directory: {
+    [key: string]: FileSystemTreeEntry
   }
 }
+
+export type FileSystemTreeEntry = FileSystemTreeContent & {
+  [key: string]: any // For additional metadata WebContainer might need
+}
+
+export interface FileSystemTree {
+  [key: string]: FileSystemTreeEntry
+}
+
+let webcontainerInstance: WebContainer | null = null
 
 /**
  * Initialize the WebContainer instance
@@ -35,7 +43,7 @@ export function getWebContainer(): WebContainer | null {
  */
 export async function mountFiles(files: FileSystemTree): Promise<void> {
   const instance = await initWebContainer()
-  await instance.mount(files)
+  await instance.mount(files as WebContainerFSTree)
 }
 
 /**
@@ -64,12 +72,12 @@ export async function installDependencies(dependencies: string[]): Promise<{
 }> {
   try {
     const instance = await initWebContainer()
-    const process = await instance.spawn('npm', ['install', ...dependencies])
+    const installProcess = await instance.spawn('npm', ['install', ...dependencies])
     
     return new Promise((resolve) => {
       let output = ''
 
-      process.output.pipeTo(
+      installProcess.output.pipeTo(
         new WritableStream({
           write(data) {
             output += data
@@ -77,7 +85,7 @@ export async function installDependencies(dependencies: string[]): Promise<{
         })
       )
 
-      process.exit.then((code) => {
+      installProcess.exit.then((code) => {
         resolve({
           success: code === 0,
           error: code !== 0 ? output : undefined
@@ -180,5 +188,62 @@ export default defineConfig({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred'
     }
+  }
+}
+
+// Helper function to create a file system tree entry
+export function createFileEntry(contents: string): FileSystemTreeEntry {
+  return {
+    file: {
+      contents
+    }
+  }
+}
+
+// Helper function to create a directory tree entry
+export function createDirectoryEntry(contents: Record<string, FileSystemTreeEntry>): FileSystemTreeEntry {
+  return {
+    directory: contents
+  }
+}
+
+// Example usage:
+export function createBasicProjectStructure(): FileSystemTree {
+  return {
+    'package.json': createFileEntry(JSON.stringify({
+      name: 'web-project',
+      type: 'module',
+      scripts: {
+        dev: 'vite'
+      },
+      dependencies: {
+        react: '^18.2.0',
+        'react-dom': '^18.2.0'
+      },
+      devDependencies: {
+        '@vitejs/plugin-react': '^4.0.0',
+        'vite': '^4.3.9'
+      }
+    }, null, 2)),
+    'src': createDirectoryEntry({
+      'App.jsx': createFileEntry(`
+import React from 'react'
+
+export default function App() {
+  return <div>Hello World</div>
+}
+`),
+      'main.jsx': createFileEntry(`
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App'
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+)
+`)
+    })
   }
 }
